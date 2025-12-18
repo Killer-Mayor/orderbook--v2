@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Orders{% endblock %}
+
+{% block content %}
+<h4 class="mb-3">Pending Orders</h4>
+
+<div class="table-responsive">
+  <table class="table table-bordered table-sm">
+    <thead class="table-light">
+      <tr>
+        <th>Party</th>
+        {% for p in products %}
+          <th class="text-center">{{ p }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for i in range(parties|length) %}
+      <tr>
+        <th>{{ parties[i] }}</th>
+        {% for qty in pivot[i] %}
+          <td class="text-center {{ 'bg-warning' if qty > 0 }}">
+            {{ qty if qty > 0 else '-' }}
+          </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

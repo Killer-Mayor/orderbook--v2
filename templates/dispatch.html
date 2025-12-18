@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Dispatch Orders{% endblock %}
+
+{% block content %}
+<h4 class="mb-3">Dispatch Orders</h4>
+
+<div class="row mb-3">
+  <div class="col-md-6">
+    <label class="form-label">Select Product</label>
+    <select id="productSelect" class="form-select">
+      <option value="">— Select Product —</option>
+    </select>
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">Select Party</label>
+    <select id="companySelect" class="form-select">
+      <option value="">— Select Party —</option>
+    </select>
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-bordered table-sm align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Order #</th>
+        <th>Product</th>
+        <th>Ordered</th>
+        <th class="text-success">Dispatched</th>
+        <th>Remaining</th>
+        <th width="140">Dispatch Qty</th>
+        <th width="170">Action</th>
+      </tr>
+    </thead>
+    <tbody id="dispatchBody">
+      <tr>
+        <td colspan="7" class="text-muted text-center">
+          Select a product or party to load dispatchable orders
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="mt-3">
+  <button id="saveBtn" class="btn btn-success" disabled>
+    Save Dispatch
+  </button>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ---------------- STATE ---------------- */
+let dispatches = {};
+const body = document.getElementById('dispatchBody');
+const saveBtn = document.getElementById('saveBtn');
+const productSelect = document.getElementById('productSelect');
+const companySelect = document.getElementById('companySelect');
+
+/* ---------------- LOAD DROPDOWNS ---------------- */
+fetch('/api/products')
+  .then(r => r.json())
+  .then(d => {
+    d.products.forEach(p => {
+      productSelect.innerHTML += `<option value="${p}">${p}</option>`;
+    });
+  });
+
+fetch('/api/parties_with_pending')
+  .then(r => r.json())
+  .then(d => {
+    d.companies.forEach(c => {
+      companySelect.innerHTML += `<option value="${c}">${c}</option>`;
+    });
+  });
+
+/* ---------------- EVENT HANDLERS ---------------- */
+productSelect.onchange = loadOrders;
+companySelect.onchange = loadOrders;
+
+/* ---------------- LOAD ORDERS ---------------- */
+function loadOrders() {
+  dispatches = {};
+  saveBtn.disabled = true;
+  body.innerHTML = '';
+
+  if (productSelect.value) {
+    fetch(`/api/orders_by_product?product=${encodeURIComponent(productSelect.value)}`)
+      .then(r => r.json())
+      .then(d => renderRows(d.orders));
+    return;
+  }
+
+  if (companySelect.value) {
+    fetch(`/api/orders_by_party?company=${encodeURIComponent(companySelect.value)}`)
+      .then(r => r.json())
+      .then(d => renderRows(d.orders));
+  }
+}
+
+/* ---------------- RENDER TABLE ---------------- */
+function renderRows(rows) {
+  body.innerHTML = '';
+
+  if (!rows || rows.length === 0) {
+    body.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-muted text-center">
+          No pending orders found
+        </td>
+      </tr>`;
+    return;
+  }
+
+  rows.forEach(r => {
+    body.innerHTML += `
+      <tr>
+        <td>${r.serial}</td>
+        <td>${r.product}</td>
+        <td>${r.ordered}</td>
+        <td class="text-success fw-bold">${r.dispatched}</td>
+        <td class="fw-bold">${r.remaining}</td>
+        <td>
+          <input
+            type="number"
+            class="form-control form-control-sm dispatch-input"
+            min="0"
+            max="${r.remaining}"
+            value="0"
+            data-serial="${r.serial}"
+            data-product="${r.product}"
+            oninput="onQtyChange(this, ${r.remaining})"
+            ${r.remaining === 0 ? 'disabled' : ''}
+          >
+        </td>
+        <td>
+          <button
+            class="btn btn-sm btn-outline-primary"
+            onclick="completeDispatch('${r.serial}', '${r.product}', ${r.remaining})"
+            ${r.remaining === 0 ? 'disabled' : ''}
+          >
+            Complete Dispatch
+          </button>
+        </td>
+      </tr>`;
+  });
+}
+
+/* ---------------- INPUT HANDLING ---------------- */
+function onQtyChange(input, max) {
+  let qty = parseInt(input.value || 0);
+  if (qty < 0) qty = 0;
+  if (qty > max) qty = max;
+  input.value = qty;
+
+  const serial = input.dataset.serial;
+  const product = input.dataset.product;
+  const key = `${serial}||${product}`;
+
+  if (qty === 0) {
+    delete dispatches[key];
+  } else {
+    dispatches[key] = {
+      order_number: serial,
+      product: product,
+      quantity: qty
+    };
+  }
+
+  saveBtn.disabled = Object.keys(dispatches).length === 0;
+}
+
+/* ---------------- COMPLETE DISPATCH ---------------- */
+function completeDispatch(serial, product, remaining) {
+  const key = `${serial}||${product}`;
+
+  dispatches[key] = {
+    order_number: serial,
+    product: product,
+    quantity: remaining
+  };
+
+  document.querySelectorAll('.dispatch-input').forEach(inp => {
+    if (inp.dataset.serial === serial && inp.dataset.product === product) {
+      inp.value = remaining;
+    }
+  });
+
+  saveBtn.disabled = false;
+}
+
+/* ---------------- SAVE ---------------- */
+saveBtn.onclick = () => {
+  const payload = Object.values(dispatches);
+
+  fetch('/dispatch/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dispatches: payload })
+  }).then(() => location.reload());
+};
+</script>
+{% endblock %}
