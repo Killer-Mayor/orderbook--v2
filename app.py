@@ -21,12 +21,11 @@ def orders():
     if not sheets:
         return render_template("error.html", message="Sheets not available")
 
-    pivot = sheets.get_pivot_data()
+    lists = sheets.load_lists()
     return render_template(
         "orders.html",
-        products=pivot["products"],
-        parties=pivot["parties"],
-        pivot=pivot["pivot"]
+        products=lists["products"],
+        parties=lists["companies"]
     )
 # ---------------- HEALTH ----------------
 @app.route("/_health")

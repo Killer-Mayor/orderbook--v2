@@ -1,31 +1,215 @@
 {% extends "base.html" %}
-{% block title %}Orders{% endblock %}
+{% block title %}View Orders{% endblock %}
 
 {% block content %}
 <h4 class="mb-3">Pending Orders</h4>
 
+<!-- FILTERS -->
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-3">
+
+      <!-- PRODUCT FILTER -->
+      <div class="col-md-6">
+        <label class="form-label">Filter Products</label>
+        <input id="productInput" class="form-control" placeholder="Type product name…">
+        <div id="productSuggestions" class="list-group position-absolute w-100 d-none"></div>
+        <div id="productChips" class="mt-2"></div>
+      </div>
+
+      <!-- PARTY FILTER -->
+      <div class="col-md-6">
+        <label class="form-label">Filter Parties</label>
+        <input id="partyInput" class="form-control" placeholder="Type party name…">
+        <div id="partySuggestions" class="list-group position-absolute w-100 d-none"></div>
+        <div id="partyChips" class="mt-2"></div>
+      </div>
+
+    </div>
+
+    <div class="mt-3 text-end">
+      <button id="clearFilters" class="btn btn-outline-secondary">
+        Clear Filters
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TABLE -->
 <div class="table-responsive">
   <table class="table table-bordered table-sm">
     <thead class="table-light">
-      <tr>
+      <tr id="tableHeader">
         <th>Party</th>
-        {% for p in products %}
-          <th class="text-center">{{ p }}</th>
-        {% endfor %}
       </tr>
     </thead>
-    <tbody>
-      {% for i in range(parties|length) %}
+    <tbody id="tableBody">
       <tr>
-        <th>{{ parties[i] }}</th>
-        {% for qty in pivot[i] %}
-          <td class="text-center {{ 'bg-warning' if qty > 0 }}">
-            {{ qty if qty > 0 else '-' }}
-          </td>
-        {% endfor %}
+        <td colspan="100%" class="text-muted text-center">
+          Loading pending orders…
+        </td>
       </tr>
-      {% endfor %}
     </tbody>
   </table>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ---------------- DATA FROM SERVER ---------------- */
+const PRODUCTS = {{ products | tojson }};
+const PARTIES = {{ parties | tojson }};
+
+/* ---------------- STATE ---------------- */
+let selectedProducts = [];
+let selectedParties = [];
+
+const body = document.getElementById('tableBody');
+const header = document.getElementById('tableHeader');
+
+/* ---------------- UTIL ---------------- */
+function norm(s) {
+  return s.toLowerCase();
+}
+
+/* ---------------- CHIP HANDLING ---------------- */
+function addChip(container, value, list, reloadFn) {
+  if (list.includes(value)) return;
+  list.push(value);
+
+  const chip = document.createElement('span');
+  chip.className = 'badge bg-primary me-2 mb-1';
+  chip.innerHTML = `${value} <span style="cursor:pointer;">×</span>`;
+  chip.onclick = () => {
+    list.splice(list.indexOf(value), 1);
+    chip.remove();
+    reloadFn();
+  };
+  container.appendChild(chip);
+  reloadFn();
+}
+
+/* ---------------- AUTOCOMPLETE ---------------- */
+function setupAutocomplete(input, suggestionsBox, data, chipsContainer, list, reloadFn) {
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+
+    // Always clear first
+    suggestionsBox.innerHTML = '';
+    suggestionsBox.classList.add('d-none');
+
+    // ❗ Do nothing if input is empty
+    if (q.length === 0) return;
+
+    // Filter ONLY selectable + matching items
+    const matches = data.filter(item =>
+      item.toLowerCase().includes(q) && !list.includes(item)
+    );
+
+    if (matches.length === 0) return;
+
+    // Show dropdown immediately
+    matches.slice(0, 6).forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'list-group-item list-group-item-action';
+      div.textContent = item;
+
+      div.onclick = () => {
+        addChip(chipsContainer, item, list, reloadFn);
+        input.value = '';
+        suggestionsBox.innerHTML = '';
+        suggestionsBox.classList.add('d-none');
+      };
+
+      suggestionsBox.appendChild(div);
+    });
+
+    suggestionsBox.classList.remove('d-none');
+  });
+
+  // Hide dropdown when focus leaves input
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      suggestionsBox.classList.add('d-none');
+    }, 120);
+  });
+}
+
+/* ---------------- INIT AUTOCOMPLETE ---------------- */
+setupAutocomplete(
+  document.getElementById('productInput'),
+  document.getElementById('productSuggestions'),
+  PRODUCTS,
+  document.getElementById('productChips'),
+  selectedProducts,
+  loadPivot
+);
+
+setupAutocomplete(
+  document.getElementById('partyInput'),
+  document.getElementById('partySuggestions'),
+  PARTIES,
+  document.getElementById('partyChips'),
+  selectedParties,
+  loadPivot
+);
+
+/* ---------------- CLEAR ---------------- */
+document.getElementById('clearFilters').onclick = () => {
+  selectedProducts = [];
+  selectedParties = [];
+  document.getElementById('productChips').innerHTML = '';
+  document.getElementById('partyChips').innerHTML = '';
+  loadPivot();
+};
+
+/* ---------------- LOAD PIVOT ---------------- */
+function loadPivot() {
+  body.innerHTML = `<tr><td colspan="100%" class="text-muted text-center">Loading…</td></tr>`;
+  header.innerHTML = `<th>Party</th>`;
+
+  const url =
+    `/api/pivot_data?product_filter=${encodeURIComponent(selectedProducts.join(','))}` +
+    `&party_filter=${encodeURIComponent(selectedParties.join(','))}`;
+
+  fetch(url)
+    .then(r => r.json())
+    .then(d => renderTable(d));
+}
+
+/* ---------------- RENDER TABLE ---------------- */
+function renderTable(data) {
+  header.innerHTML = `<th>Party</th>`;
+  body.innerHTML = '';
+
+  if (!data.parties.length || !data.products.length) {
+    body.innerHTML = `
+      <tr>
+        <td colspan="100%" class="text-muted text-center">
+          No pending orders found
+        </td>
+      </tr>`;
+    return;
+  }
+
+  data.products.forEach(p => {
+    header.innerHTML += `<th class="text-center">${p}</th>`;
+  });
+
+  data.parties.forEach((party, i) => {
+    let row = `<tr><th>${party}</th>`;
+    data.pivot[i].forEach(qty => {
+      row += `
+        <td class="text-center ${qty > 0 ? 'bg-warning fw-bold' : ''}">
+          ${qty > 0 ? qty : '-'}
+        </td>`;
+    });
+    row += `</tr>`;
+    body.innerHTML += row;
+  });
+}
+
+/* ---------------- INITIAL LOAD ---------------- */
+loadPivot();
+</script>
 {% endblock %}
