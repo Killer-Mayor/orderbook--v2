@@ -61,7 +61,7 @@ const productSelect = document.getElementById('productSelect');
 const companySelect = document.getElementById('companySelect');
 
 /* ---------------- LOAD DROPDOWNS ---------------- */
-fetch('/api/products')
+fetch('/api/products_with_pending')
   .then(r => r.json())
   .then(d => {
     d.products.forEach(p => {

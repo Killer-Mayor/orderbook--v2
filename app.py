@@ -224,6 +224,13 @@ def parties_with_pending():
 
     pivot = sheets.get_pivot_data()
     return jsonify({"companies": pivot["parties"]})
+@app.route("/api/products_with_pending")
+def products_with_pending():
+    if not sheets:
+        return jsonify({"products": []})
+
+    pivot = sheets.get_pivot_data()
+    return jsonify({"products": pivot["products"]})
 
 @app.route("/api/recent_orders")
 def api_recent_orders():
