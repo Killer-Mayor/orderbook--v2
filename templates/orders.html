@@ -166,21 +166,39 @@ function renderTable(data) {
     return;
   }
 
+  // Build header
   data.products.forEach(p => {
     header.innerHTML += `<th class="text-center">${p}</th>`;
   });
 
+  // Prepare totals array
+  const totals = Array(data.products.length).fill(0);
+
+  // Render rows
   data.parties.forEach((party, i) => {
     let row = `<tr><th>${party}</th>`;
-    data.pivot[i].forEach(qty => {
-      row += `
-        <td class="text-center ${qty > 0 ? 'bg-warning fw-bold' : ''}">
-          ${qty > 0 ? qty : '-'}
-        </td>`;
+
+    data.pivot[i].forEach((qty, j) => {
+      if (qty > 0) {
+        totals[j] += qty;
+        row += `<td class="text-center bg-warning fw-bold">${qty}</td>`;
+      } else {
+        row += `<td class="text-center">-</td>`;
+      }
     });
+
     row += `</tr>`;
     body.innerHTML += row;
   });
+
+  // Render totals row
+  let totalRow = `<tr class="table-dark fw-bold"><th>TOTAL</th>`;
+  totals.forEach(t => {
+    totalRow += `<td class="text-center">${t > 0 ? t : '-'}</td>`;
+  });
+  totalRow += `</tr>`;
+
+  body.innerHTML += totalRow;
 }
 
 /* ---------------- CLEAR ---------------- */
