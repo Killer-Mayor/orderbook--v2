@@ -315,3 +315,49 @@ class SheetsClient:
         # ---------------- RECENT ORDERS ----------------
     def _norm(self, s):
         return (s or "").strip().lower().replace(" ", "")
+
+
+    def get_recent_orders_with_row(self, limit=15):
+        rows = self.sheet.get_all_values()
+        out = []
+
+        for i, r in enumerate(rows[1:], start=2):  # sheet rows are 1-indexed
+            if len(r) < 2 or not r[1].strip():
+                continue
+
+            out.append({
+                "row": i,                  # 👈 IMPORTANT
+                "serial": r[0],
+                "date": r[1],
+                "company": r[2] if len(r) > 2 else "",
+                "product": r[3] if len(r) > 3 else "",
+                "brand": r[4] if len(r) > 4 else "",
+                "quantity": r[5] if len(r) > 5 else "",
+                "price": r[6] if len(r) > 6 else "",
+                "total": (
+                    float(r[5]) * float(r[6]) * 1.05
+                    if len(r) > 6 and r[5] and r[6]
+                    else ""
+                )
+            })
+
+        out.reverse()
+        return out[:limit]
+
+
+    def update_order_row(self, row, product, brand, quantity, price):
+        self.sheet.update(
+            f"D{row}:G{row}",
+            [[product, brand, int(quantity), float(price)]],
+            value_input_option="USER_ENTERED"
+        )
+
+
+    def delete_order_row(self, row):
+        # Soft delete: clear Date + data, keep serial & formulas
+        self.sheet.update(
+            f"B{row}:G{row}",
+            [["", "", "", "", "", ""]],
+            value_input_option="USER_ENTERED"
+        )
+    

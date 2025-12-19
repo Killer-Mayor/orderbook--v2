@@ -55,6 +55,33 @@
     </form>
   </div>
 </div>
+
+<hr class="my-4">
+
+<h5>Recent Orders</h5>
+
+<div class="table-responsive">
+  <table class="table table-bordered table-sm align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Serial</th>
+        <th>Company</th>
+        <th>Product</th>
+        <th>Brand</th>
+        <th>Qty</th>
+        <th>Price</th>
+        <th>Total</th>
+        <th width="140">Action</th>
+      </tr>
+    </thead>
+    <tbody id="recentOrdersBody">
+      <tr>
+        <td colspan="7" class="text-muted text-center">Loading…</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -78,5 +105,67 @@ document.addEventListener('click', e => {
     e.target.closest('tr').remove();
   }
 });
+const recentBody = document.getElementById('recentOrdersBody');
+
+function loadRecentOrders() {
+  fetch('/api/recent_orders')
+    .then(r => r.json())
+    .then(d => renderRecent(d.orders));
+}
+
+function renderRecent(rows) {
+  recentBody.innerHTML = '';
+
+  if (!rows.length) {
+    recentBody.innerHTML = `
+      <tr><td colspan="7" class="text-muted text-center">No recent orders</td></tr>`;
+    return;
+  }
+
+  rows.forEach(o => {
+    recentBody.innerHTML += `
+      <tr>
+        <td>${o.serial}</td>
+        <td>${o.company}</td>
+        <td><input class="form-control form-control-sm" value="${o.product}" data-row="${o.row}" data-key="product"></td>
+        <td><input class="form-control form-control-sm" value="${o.brand}" data-row="${o.row}" data-key="brand"></td>
+        <td><input type="number" class="form-control form-control-sm" value="${o.quantity}" data-row="${o.row}" data-key="quantity"></td>
+        <td><input type="number" step="0.01" class="form-control form-control-sm" value="${o.price}" data-row="${o.row}" data-key="price"></td>
+        <td>${(o.quantity * o.price * 1.05).toFixed(2)}</td>
+        <td>
+          <button class="btn btn-sm btn-success" onclick="saveRow(${o.row}, this)">Save</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteRow(${o.row})">Delete</button>
+        </td>
+      </tr>`;
+  });
+}
+
+function saveRow(row, btn) {
+  const inputs = document.querySelectorAll(`[data-row="${row}"]`);
+  const payload = { row };
+
+  inputs.forEach(i => payload[i.dataset.key] = i.value);
+
+  fetch('/api/update_order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(() => {
+    btn.textContent = 'Saved';
+    setTimeout(() => btn.textContent = 'Save', 1000);
+  });
+}
+
+function deleteRow(row) {
+  if (!confirm('Delete this order entry?')) return;
+
+  fetch('/api/delete_order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ row })
+  }).then(loadRecentOrders);
+}
+
+loadRecentOrders();
 </script>
 {% endblock %}

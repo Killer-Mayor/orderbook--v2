@@ -199,7 +199,42 @@ def parties_with_pending():
         return jsonify({"companies": []})
 
     pivot = sheets.get_pivot_data()
-    return jsonify({"companies": pivot["parties"]})
+    return jsonify({"companies": pivot["parties"]})@app.route("/api/recent_orders")
+def api_recent_orders():
+    return jsonify({
+        "orders": sheets.get_recent_orders_with_row()
+    })
+
+@app.route("/api/recent_orders")
+def api_recent_orders():
+    if not sheets:
+        return jsonify({"orders": []})
+
+    return jsonify({
+        "orders": sheets.get_recent_orders_with_row()
+    })
+
+
+@app.route("/api/update_order", methods=["POST"])
+def api_update_order():
+    data = request.get_json(force=True)
+
+    sheets.update_order_row(
+        row=int(data["row"]),
+        product=data.get("product", ""),
+        brand=data.get("brand", ""),
+        quantity=data.get("quantity", 0),
+        price=data.get("price", 0)
+    )
+
+    return jsonify({"ok": True})
+
+
+@app.route("/api/delete_order", methods=["POST"])
+def api_delete_order():
+    data = request.get_json(force=True)
+    sheets.delete_order_row(int(data["row"]))
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
