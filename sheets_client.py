@@ -2,6 +2,20 @@ import os
 import datetime
 import gspread
 from google.oauth2.service_account import Credentials
+import time
+import random
+from googleapiclient.errors import HttpError
+
+def _retry(self, fn, retries=3):
+    for i in range(retries):
+        try:
+            return fn()
+        except HttpError as e:
+            if i == retries - 1:
+                raise
+            sleep = (2 ** i) + random.random()
+            time.sleep(sleep)
+
 
 SERVICE_ACCOUNT_FILE = "service_account.json"
 SHEET_ID = "1WcNZPg8upKAn1eVlpM2faaHl1HxldEz4p8upgmGSOas"
@@ -28,6 +42,8 @@ class SheetsClient:
         )
         self.client = gspread.authorize(creds)
         self.sheet = self.client.open_by_key(SHEET_ID).worksheet("orders")
+        self._cache = {}
+        self._cache_ttl = 15  # seconds (safe)
 
         try:
             self.dispatch_ws = self.client.open_by_key(SHEET_ID).worksheet("dispatch")
@@ -38,6 +54,20 @@ class SheetsClient:
             self.dispatch_ws.append_row(
                 ["Date", "Company", "Product", "Quantity", "Order Number"]
             )
+    def _cached(self, key, fn):
+        now = time.time()
+
+        if key in self._cache:
+            value, ts = self._cache[key]
+            if now - ts < self._cache_ttl:
+                return value
+
+        value = fn()
+        self._cache[key] = (value, now)
+        return value
+    def _invalidate_cache(self):
+        self._cache.clear()
+
 
     # ---------------- LOAD LISTS ----------------
     def load_lists(self):
@@ -71,7 +101,7 @@ class SheetsClient:
             quantity,
             order_number
         ], value_input_option="USER_ENTERED")
-
+        self._invalidate_cache()
 
     # ---------------- AGGREGATIONS ----------------
     def _dispatch_map(self):
@@ -104,7 +134,8 @@ class SheetsClient:
         dispatch = self._dispatch_map()
         out = []
 
-        rows = self.sheet.get_all_values()
+        rows = self._cached("orders_rows", lambda: self.sheet.get_all_values())
+
 
         for r in rows[1:]:
             if len(r) < 6:
@@ -147,7 +178,8 @@ class SheetsClient:
         out = []
 
         target = self._norm(product)
-        rows = self.sheet.get_all_values()
+        rows = self._cached("orders_rows", lambda: self.sheet.get_all_values())
+
 
         for r in rows[1:]:
             if len(r) < 6:
@@ -190,7 +222,8 @@ class SheetsClient:
 
 
     def get_pivot_data(self, product_filter="", party_filter=""):
-        rows = self.sheet.get_all_values()
+        rows = self._cached("orders_rows", lambda: self.sheet.get_all_values())
+
         dispatch = self._dispatch_map()
 
         data = {}
@@ -248,7 +281,8 @@ class SheetsClient:
         }
 
     def get_recent_orders(self, limit=50):
-        rows = self.sheet.get_all_values()
+        rows = self._cached("orders_rows", lambda: self.sheet.get_all_values())
+
         if len(rows) <= 1:
             return []
 
@@ -318,7 +352,7 @@ class SheetsClient:
 
 
     def get_recent_orders_with_row(self, limit=15):
-        rows = self.sheet.get_all_values()
+        rows = self._cached("orders_rows", lambda: self.sheet.get_all_values())
         out = []
 
         for i, r in enumerate(rows[1:], start=2):  # sheet rows are 1-indexed
@@ -347,10 +381,18 @@ class SheetsClient:
 
     def update_order_row(self, row, product, brand, quantity, price):
         self.sheet.update(
-            f"D{row}:G{row}",
-            [[product, brand, int(quantity), float(price)]],
-            value_input_option="USER_ENTERED"
-        )
+        f"D{row}:G{row}",
+        [[
+            product,
+            brand,
+            int(quantity),
+            float(price)
+        ]],
+        value_input_option="USER_ENTERED"
+    )
+
+        self._invalidate_cache()
+
 
 
     def delete_order_row(self, row):
@@ -360,4 +402,22 @@ class SheetsClient:
             [["", "", "", "", "", ""]],
             value_input_option="USER_ENTERED"
         )
-    
+        self._invalidate_cache()
+    def restore_order_row(self, row, data):
+        """
+        data = dict with keys:
+        date, company, product, brand, quantity, price
+        """
+        self.sheet.update(
+            f"B{row}:G{row}",
+            [[
+                data.get("date", ""),
+                data.get("company", ""),
+                data.get("product", ""),
+                data.get("brand", ""),
+                data.get("quantity", ""),
+                data.get("price", "")
+            ]],
+            value_input_option="USER_ENTERED"
+        )
+        self._invalidate_cache()

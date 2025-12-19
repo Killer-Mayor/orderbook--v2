@@ -59,7 +59,12 @@
 <hr class="my-4">
 
 <h5>Recent Orders</h5>
-
+<div id="undoBanner" class="alert alert-warning d-none mt-3">
+  Order deleted.
+  <button class="btn btn-sm btn-outline-dark ms-2" onclick="undoDelete()">
+    Undo
+  </button>
+</div>
 <div class="table-responsive">
   <table class="table table-bordered table-sm align-middle">
     <thead class="table-light">
@@ -81,6 +86,8 @@
     </tbody>
   </table>
 </div>
+
+
 
 {% endblock %}
 
@@ -156,14 +163,54 @@ function saveRow(row, btn) {
   });
 }
 
+let lastDeleted = null;
+
 function deleteRow(row) {
   if (!confirm('Delete this order entry?')) return;
+
+  // Capture current row data for undo
+  const inputs = document.querySelectorAll(`[data-row="${row}"]`);
+  const snapshot = { row, data: {} };
+
+  inputs.forEach(i => {
+    snapshot.data[i.dataset.key] = i.value;
+  });
+
+  snapshot.data.date = new Date().toISOString().split('T')[0];
+  snapshot.data.company = inputs[0].closest('tr').children[1].innerText;
 
   fetch('/api/delete_order', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ row })
-  }).then(loadRecentOrders);
+  }).then(() => {
+    lastDeleted = snapshot;
+    showUndoBanner();
+    loadRecentOrders();
+  });
+}
+function showUndoBanner() {
+  const banner = document.getElementById('undoBanner');
+  banner.classList.remove('d-none');
+
+  setTimeout(() => {
+    banner.classList.add('d-none');
+    lastDeleted = null;
+  }, 10000); // 10 seconds
+}
+
+function undoDelete() {
+  if (!lastDeleted) return;
+
+  fetch('/api/undo_delete_order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(lastDeleted)
+  }).then(() => {
+    lastDeleted = null;
+    document.getElementById('undoBanner').classList.add('d-none');
+    loadRecentOrders();
+  });
 }
 
 loadRecentOrders();

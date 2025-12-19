@@ -3,10 +3,26 @@ from flask_cors import CORS
 from sheets_client import SheetsClient
 import os
 import time
+from collections import defaultdict
 
 app = Flask(__name__)
 CORS(app)
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
+_rate_limit = defaultdict(list)
+RATE_LIMIT = 30  # requests
+WINDOW = 60      # seconds
+def rate_limited(key):
+    now = time.time()
+    window = _rate_limit[key]
+
+    # remove old
+    _rate_limit[key] = [t for t in window if now - t < WINDOW]
+
+    if len(_rate_limit[key]) >= RATE_LIMIT:
+        return True
+
+    _rate_limit[key].append(now)
+    return False
 
 # Initialize Sheets client
 try:
@@ -121,18 +137,26 @@ def api_companies():
 
 @app.route("/api/orders_by_product")
 def api_orders_by_product():
+    if rate_limited("pivot"):
+        return jsonify({"error": "Rate limit exceeded"}), 429
+
     product = request.args.get("product", "")
     return jsonify({"orders": sheets.get_orders_by_product(product) if sheets else []})
 
 
 @app.route("/api/orders_by_party")
 def api_orders_by_party():
+    if rate_limited("pivot"):
+        return jsonify({"error": "Rate limit exceeded"}), 429
     company = request.args.get("company", "")
     return jsonify({"orders": sheets.get_orders_by_party(company) if sheets else []})
 
 
 @app.route("/api/pivot_data")
 def api_pivot_data():
+    if rate_limited("pivot"):
+        return jsonify({"error": "Rate limit exceeded"}), 429
+
     if not sheets:
         return jsonify({"pivot": [], "products": [], "parties": []})
 
@@ -199,11 +223,7 @@ def parties_with_pending():
         return jsonify({"companies": []})
 
     pivot = sheets.get_pivot_data()
-    return jsonify({"companies": pivot["parties"]})@app.route("/api/recent_orders")
-def api_recent_orders():
-    return jsonify({
-        "orders": sheets.get_recent_orders_with_row()
-    })
+    return jsonify({"companies": pivot["parties"]})
 
 @app.route("/api/recent_orders")
 def api_recent_orders():
@@ -234,6 +254,16 @@ def api_update_order():
 def api_delete_order():
     data = request.get_json(force=True)
     sheets.delete_order_row(int(data["row"]))
+    return jsonify({"ok": True})
+
+@app.route("/api/undo_delete_order", methods=["POST"])
+def api_undo_delete_order():
+    data = request.get_json(force=True)
+
+    sheets.restore_order_row(
+        row=int(data["row"]),
+        data=data["data"]
+    )
     return jsonify({"ok": True})
 
 
