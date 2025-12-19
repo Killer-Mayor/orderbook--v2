@@ -150,18 +150,49 @@ def dispatch():
 @app.route("/dispatch/save", methods=["POST"])
 def save_dispatch():
     if not sheets:
-        return jsonify({"ok": False}), 400
+        return jsonify({"ok": False, "error": "Sheets not initialized"}), 500
 
-    data = request.json
-    for d in data.get("dispatches", []):
-        sheets.add_dispatch(
-            company=d["company"],
-            product=d["product"],
-            quantity=int(d["quantity"]),
-            order_number=d["order_number"]
-        )
+    data = request.get_json(force=True, silent=True)
+    if not data or "dispatches" not in data:
+        return jsonify({"ok": False, "error": "Invalid payload"}), 400
 
-    return jsonify({"ok": True})
+    written = 0
+    errors = []
+
+    for d in data["dispatches"]:
+        try:
+            company= d.get("company", "").strip()
+            serial = str(d.get("order_number", "")).strip()
+            product = str(d.get("product", "")).strip()
+            qty = int(d.get("quantity", 0))
+
+            if not serial or not product or qty <= 0:
+                continue
+
+            sheets.add_dispatch(
+                company=company,              # company is optional for logging
+                product=product,
+                quantity=qty,
+                order_number=serial
+            )
+            written += 1
+
+        except Exception as e:
+            errors.append(str(e))
+
+    if written == 0:
+        return jsonify({
+            "ok": False,
+            "error": "No dispatch rows written",
+            "details": errors
+        }), 400
+
+    return jsonify({
+        "ok": True,
+        "rows_written": written
+    })
+
+
 @app.route("/api/parties_with_pending")
 def parties_with_pending():
     if not sheets:

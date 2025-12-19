@@ -10,18 +10,18 @@
     <div class="row g-3">
 
       <!-- PRODUCT FILTER -->
-      <div class="col-md-6">
+      <div class="col-md-6 position-relative">
         <label class="form-label">Filter Products</label>
-        <input id="productInput" class="form-control" placeholder="Type product name…">
-        <div id="productSuggestions" class="list-group position-absolute w-100 d-none"></div>
+        <input id="productInput" class="form-control" placeholder="Type or select product…">
+        <div id="productDropdown" class="list-group position-absolute w-100 d-none"></div>
         <div id="productChips" class="mt-2"></div>
       </div>
 
       <!-- PARTY FILTER -->
-      <div class="col-md-6">
+      <div class="col-md-6 position-relative">
         <label class="form-label">Filter Parties</label>
-        <input id="partyInput" class="form-control" placeholder="Type party name…">
-        <div id="partySuggestions" class="list-group position-absolute w-100 d-none"></div>
+        <input id="partyInput" class="form-control" placeholder="Type or select party…">
+        <div id="partyDropdown" class="list-group position-absolute w-100 d-none"></div>
         <div id="partyChips" class="mt-2"></div>
       </div>
 
@@ -56,24 +56,32 @@
 
 {% block extra_js %}
 <script>
-/* ---------------- DATA FROM SERVER ---------------- */
-const PRODUCTS = {{ products | tojson }};
-const PARTIES = {{ parties | tojson }};
-
 /* ---------------- STATE ---------------- */
+let ALL_PRODUCTS = [];
+let ALL_PARTIES = [];
+
 let selectedProducts = [];
 let selectedParties = [];
 
 const body = document.getElementById('tableBody');
 const header = document.getElementById('tableHeader');
 
-/* ---------------- UTIL ---------------- */
+/* ---------------- ELEMENTS ---------------- */
+const productInput = document.getElementById('productInput');
+const productDropdown = document.getElementById('productDropdown');
+const productChips = document.getElementById('productChips');
+
+const partyInput = document.getElementById('partyInput');
+const partyDropdown = document.getElementById('partyDropdown');
+const partyChips = document.getElementById('partyChips');
+
+/* ---------------- NORMALIZE ---------------- */
 function norm(s) {
   return s.toLowerCase();
 }
 
-/* ---------------- CHIP HANDLING ---------------- */
-function addChip(container, value, list, reloadFn) {
+/* ---------------- CHIPS ---------------- */
+function addChip(container, value, list) {
   if (list.includes(value)) return;
   list.push(value);
 
@@ -83,85 +91,51 @@ function addChip(container, value, list, reloadFn) {
   chip.onclick = () => {
     list.splice(list.indexOf(value), 1);
     chip.remove();
-    reloadFn();
+    loadPivot();
   };
   container.appendChild(chip);
-  reloadFn();
-}
-
-/* ---------------- AUTOCOMPLETE ---------------- */
-function setupAutocomplete(input, suggestionsBox, data, chipsContainer, list, reloadFn) {
-  input.addEventListener('input', () => {
-    const q = input.value.trim().toLowerCase();
-
-    // Always clear first
-    suggestionsBox.innerHTML = '';
-    suggestionsBox.classList.add('d-none');
-
-    // ❗ Do nothing if input is empty
-    if (q.length === 0) return;
-
-    // Filter ONLY selectable + matching items
-    const matches = data.filter(item =>
-      item.toLowerCase().includes(q) && !list.includes(item)
-    );
-
-    if (matches.length === 0) return;
-
-    // Show dropdown immediately
-    matches.slice(0, 6).forEach(item => {
-      const div = document.createElement('div');
-      div.className = 'list-group-item list-group-item-action';
-      div.textContent = item;
-
-      div.onclick = () => {
-        addChip(chipsContainer, item, list, reloadFn);
-        input.value = '';
-        suggestionsBox.innerHTML = '';
-        suggestionsBox.classList.add('d-none');
-      };
-
-      suggestionsBox.appendChild(div);
-    });
-
-    suggestionsBox.classList.remove('d-none');
-  });
-
-  // Hide dropdown when focus leaves input
-  input.addEventListener('blur', () => {
-    setTimeout(() => {
-      suggestionsBox.classList.add('d-none');
-    }, 120);
-  });
-}
-
-/* ---------------- INIT AUTOCOMPLETE ---------------- */
-setupAutocomplete(
-  document.getElementById('productInput'),
-  document.getElementById('productSuggestions'),
-  PRODUCTS,
-  document.getElementById('productChips'),
-  selectedProducts,
-  loadPivot
-);
-
-setupAutocomplete(
-  document.getElementById('partyInput'),
-  document.getElementById('partySuggestions'),
-  PARTIES,
-  document.getElementById('partyChips'),
-  selectedParties,
-  loadPivot
-);
-
-/* ---------------- CLEAR ---------------- */
-document.getElementById('clearFilters').onclick = () => {
-  selectedProducts = [];
-  selectedParties = [];
-  document.getElementById('productChips').innerHTML = '';
-  document.getElementById('partyChips').innerHTML = '';
   loadPivot();
-};
+}
+
+/* ---------------- DROPDOWN + TYPE ---------------- */
+function setupFilter(input, dropdown, dataFn, chipsContainer, selectedList) {
+
+  function renderDropdown(query = '') {
+    dropdown.innerHTML = '';
+    const q = norm(query);
+
+    dataFn()
+      .filter(x => norm(x).includes(q) && !selectedList.includes(x))
+      .forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'list-group-item list-group-item-action';
+        div.textContent = item;
+        div.onclick = () => {
+          addChip(chipsContainer, item, selectedList);
+          input.value = '';
+          dropdown.classList.add('d-none');
+        };
+        dropdown.appendChild(div);
+      });
+
+    dropdown.classList.toggle('d-none', dropdown.children.length === 0);
+  }
+
+  input.onfocus = () => renderDropdown('');
+  input.oninput = () => renderDropdown(input.value);
+  input.onblur = () => setTimeout(() => dropdown.classList.add('d-none'), 150);
+}
+
+/* ---------------- LOAD INITIAL PIVOT (SOURCE OF TRUTH) ---------------- */
+function initFilters() {
+  fetch('/api/pivot_data')
+    .then(r => r.json())
+    .then(d => {
+      ALL_PRODUCTS = d.products;
+      ALL_PARTIES = d.parties;
+      loadPivot();
+    });
+}
 
 /* ---------------- LOAD PIVOT ---------------- */
 function loadPivot() {
@@ -209,7 +183,19 @@ function renderTable(data) {
   });
 }
 
-/* ---------------- INITIAL LOAD ---------------- */
-loadPivot();
+/* ---------------- CLEAR ---------------- */
+document.getElementById('clearFilters').onclick = () => {
+  selectedProducts = [];
+  selectedParties = [];
+  productChips.innerHTML = '';
+  partyChips.innerHTML = '';
+  loadPivot();
+};
+
+/* ---------------- INIT ---------------- */
+setupFilter(productInput, productDropdown, () => ALL_PRODUCTS, productChips, selectedProducts);
+setupFilter(partyInput, partyDropdown, () => ALL_PARTIES, partyChips, selectedParties);
+
+initFilters();
 </script>
 {% endblock %}

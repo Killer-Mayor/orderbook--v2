@@ -25,6 +25,7 @@
     <thead class="table-light">
       <tr>
         <th>Order #</th>
+        <th>Company</th> 
         <th>Product</th>
         <th>Ordered</th>
         <th class="text-success">Dispatched</th>
@@ -117,7 +118,9 @@ function renderRows(rows) {
   rows.forEach(r => {
     body.innerHTML += `
       <tr>
+         
         <td>${r.serial}</td>
+        <td>${r.company}</td>  
         <td>${r.product}</td>
         <td>${r.ordered}</td>
         <td class="text-success fw-bold">${r.dispatched}</td>
@@ -130,6 +133,7 @@ function renderRows(rows) {
             max="${r.remaining}"
             value="0"
             data-serial="${r.serial}"
+            data-company="${r.company}"
             data-product="${r.product}"
             oninput="onQtyChange(this, ${r.remaining})"
             ${r.remaining === 0 ? 'disabled' : ''}
@@ -138,7 +142,7 @@ function renderRows(rows) {
         <td>
           <button
             class="btn btn-sm btn-outline-primary"
-            onclick="completeDispatch('${r.serial}', '${r.product}', ${r.remaining})"
+            onclick="completeDispatch('${r.serial}', '${r.company}', '${r.product}', ${r.remaining})"
             ${r.remaining === 0 ? 'disabled' : ''}
           >
             Complete Dispatch
@@ -156,6 +160,7 @@ function onQtyChange(input, max) {
   input.value = qty;
 
   const serial = input.dataset.serial;
+  const company = input.dataset.company;
   const product = input.dataset.product;
   const key = `${serial}||${product}`;
 
@@ -165,6 +170,7 @@ function onQtyChange(input, max) {
     dispatches[key] = {
       order_number: serial,
       product: product,
+      company: company,
       quantity: qty
     };
   }
@@ -173,12 +179,14 @@ function onQtyChange(input, max) {
 }
 
 /* ---------------- COMPLETE DISPATCH ---------------- */
-function completeDispatch(serial, product, remaining) {
+function completeDispatch(serial, company, product, remaining) {
   const key = `${serial}||${product}`;
 
   dispatches[key] = {
     order_number: serial,
     product: product,
+    company: company,
+    company: company,
     quantity: remaining
   };
 

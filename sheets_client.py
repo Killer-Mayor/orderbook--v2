@@ -70,7 +70,8 @@ class SheetsClient:
             product,
             quantity,
             order_number
-        ])
+        ], value_input_option="USER_ENTERED")
+
 
     # ---------------- AGGREGATIONS ----------------
     def _dispatch_map(self):
@@ -96,7 +97,6 @@ class SheetsClient:
             dispatch[key] = dispatch.get(key, 0) + qty
 
         return dispatch
-
 
 
 
@@ -130,6 +130,7 @@ class SheetsClient:
                 continue
 
             out.append({
+                "company": party,
                 "product": product,
                 "serial": serial,
                 "ordered": ordered,
@@ -158,6 +159,8 @@ class SheetsClient:
             if self._norm(prod) != target:
                 continue
 
+            party = r[2] or ""
+
             try:
                 ordered = int(float(r[5]))
             except Exception:
@@ -170,7 +173,7 @@ class SheetsClient:
                 continue
 
             out.append({
-                "company": r[2],
+                "company": party,          
                 "product": prod,
                 "serial": serial,
                 "ordered": ordered,
@@ -180,6 +183,7 @@ class SheetsClient:
             })
 
         return out
+
 
 
 
