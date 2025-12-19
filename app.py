@@ -4,6 +4,10 @@ from sheets_client import SheetsClient
 import os
 import time
 from collections import defaultdict
+from collections import deque
+import hashlib
+_recent_submissions = deque(maxlen=200)
+DEDUP_WINDOW = 5  # seconds
 
 app = Flask(__name__)
 CORS(app)
@@ -84,13 +88,14 @@ def submit():
         flash("Company required", "warning")
         return redirect(url_for("index"))
 
-    success = 0
+    # ---------------- BUILD ORDER LINES ----------------
+    order_lines = []
 
     for key in request.form:
         if not key.startswith("orders[") or "[product]" not in key:
             continue
 
-        idx = key[key.find("[")+1:key.find("]")]
+        idx = key[key.find("[") + 1 : key.find("]")]
         product = request.form.get(f"orders[{idx}][product]", "").strip()
         brand = request.form.get(f"orders[{idx}][brand]", "").strip()
         qty = request.form.get(f"orders[{idx}][quantity]", "").strip()
@@ -102,17 +107,50 @@ def submit():
         try:
             qty = int(qty)
             price = float(price)
+            if qty <= 0:
+                continue
+
             if includes_gst:
                 price = round(price / 1.05, 2)
 
-            order_number = f"{int(time.time())}-{idx}"
+            order_lines.append((product, brand, qty, price))
+        except ValueError:
+            continue
 
+    if not order_lines:
+        flash("No valid order items", "warning")
+        return redirect(url_for("index"))
+
+    # ---------------- DEDUPLICATION ----------------
+    now = time.time()
+
+    # Create stable fingerprint (order-insensitive)
+    fingerprint_data = (
+        company,
+        tuple(sorted((p, b, q, pr) for p, b, q, pr in order_lines))
+    )
+
+    fingerprint = hashlib.sha256(
+        repr(fingerprint_data).encode()
+    ).hexdigest()
+
+    for ts, fp in list(_recent_submissions):
+        if fp == fingerprint and now - ts < DEDUP_WINDOW:
+            return redirect(url_for("index"))
+
+    _recent_submissions.append((now, fingerprint))
+
+    # ---------------- WRITE TO SHEET ----------------
+    success = 0
+
+    for product, brand, qty, price in order_lines:
+        try:
             sheets.add_order(
                 company=company,
                 product=product,
-                quantity=qty,
-                price=price,
                 brand=brand,
+                quantity=qty,
+                price=price
             )
             success += 1
         except Exception as e:

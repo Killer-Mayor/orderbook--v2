@@ -40,7 +40,7 @@
   <table class="table table-bordered table-sm">
     <thead class="table-light">
       <tr id="tableHeader">
-        <th>Party</th>
+        <th>Party\products</th>
       </tr>
     </thead>
     <tbody id="tableBody">
@@ -153,7 +153,7 @@ function loadPivot() {
 
 /* ---------------- RENDER TABLE ---------------- */
 function renderTable(data) {
-  header.innerHTML = `<th>Party</th>`;
+  header.innerHTML = `<th>Party\\\Products</th>`;
   body.innerHTML = '';
 
   if (!data.parties.length || !data.products.length) {
@@ -171,16 +171,31 @@ function renderTable(data) {
     header.innerHTML += `<th class="text-center">${p}</th>`;
   });
 
-  // Prepare totals array
+// Prepare totals array
   const totals = Array(data.products.length).fill(0);
 
-  // Render rows
+  // First pass: compute totals
+  data.pivot.forEach(row => {
+    row.forEach((qty, j) => {
+      if (qty > 0) totals[j] += qty;
+    });
+  });
+
+  // Render totals row FIRST
+  let totalRow = `<tr class="table-dark fw-bold"><th>TOTAL</th>`;
+  totals.forEach(t => {
+    totalRow += `<td class="text-center">${t > 0 ? t : '-'}</td>`;
+  });
+  totalRow += `</tr>`;
+
+  body.innerHTML += totalRow;
+
+  // Render party rows
   data.parties.forEach((party, i) => {
     let row = `<tr><th>${party}</th>`;
 
     data.pivot[i].forEach((qty, j) => {
       if (qty > 0) {
-        totals[j] += qty;
         row += `<td class="text-center bg-warning fw-bold">${qty}</td>`;
       } else {
         row += `<td class="text-center">-</td>`;
@@ -190,15 +205,6 @@ function renderTable(data) {
     row += `</tr>`;
     body.innerHTML += row;
   });
-
-  // Render totals row
-  let totalRow = `<tr class="table-dark fw-bold"><th>TOTAL</th>`;
-  totals.forEach(t => {
-    totalRow += `<td class="text-center">${t > 0 ? t : '-'}</td>`;
-  });
-  totalRow += `</tr>`;
-
-  body.innerHTML += totalRow;
 }
 
 /* ---------------- CLEAR ---------------- */

@@ -6,15 +6,6 @@ import time
 import random
 from googleapiclient.errors import HttpError
 
-def _retry(self, fn, retries=3):
-    for i in range(retries):
-        try:
-            return fn()
-        except HttpError as e:
-            if i == retries - 1:
-                raise
-            sleep = (2 ** i) + random.random()
-            time.sleep(sleep)
 
 
 SERVICE_ACCOUNT_FILE = "service_account.json"
@@ -36,6 +27,16 @@ SCOPES = [
 
 
 class SheetsClient:
+    def _retry(self, fn, retries=3):
+        for i in range(retries):
+            try:
+                return fn()
+            except HttpError as e:
+                if i == retries - 1:
+                    raise
+                sleep = (2 ** i) + random.random()
+                time.sleep(sleep)
+
     def __init__(self):
         creds = Credentials.from_service_account_file(
             SERVICE_ACCOUNT_FILE, scopes=SCOPES
@@ -421,3 +422,4 @@ class SheetsClient:
             value_input_option="USER_ENTERED"
         )
         self._invalidate_cache()
+        
