@@ -196,6 +196,7 @@ def api_pivot_data():
         return jsonify({"error": "Rate limit exceeded"}), 429
 
     if not sheets:
+        print ("Sheets not initialized")
         return jsonify({"pivot": [], "products": [], "parties": []})
 
     pf = request.args.get("product_filter", "")

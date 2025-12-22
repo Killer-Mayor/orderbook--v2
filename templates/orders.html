@@ -143,8 +143,8 @@ function loadPivot() {
   header.innerHTML = `<th>Party</th>`;
 
   const url =
-    `/api/pivot_data?product_filter=${encodeURIComponent(selectedProducts.join(','))}` +
-    `&party_filter=${encodeURIComponent(selectedParties.join(','))}`;
+    `/api/pivot_data?product_filter=${encodeURIComponent([...selectedProducts].join(','))}` +
+    `&party_filter=${encodeURIComponent([...selectedParties].join(','))}`;
 
   fetch(url)
     .then(r => r.json())
@@ -209,11 +209,11 @@ function renderTable(data) {
 
 /* ---------------- CLEAR ---------------- */
 document.getElementById('clearFilters').onclick = () => {
-  selectedProducts = [];
-  selectedParties = [];
-  productChips.innerHTML = '';
-  partyChips.innerHTML = '';
-  loadPivot();
+selectedProducts= [];
+selectedParties =[];
+document.getElementById('productTags').innerHTML = '';
+document.getElementById('partyTags').innerHTML = '';
+loadPivot();
 };
 
 /* ---------------- INIT ---------------- */

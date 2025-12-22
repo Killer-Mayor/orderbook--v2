@@ -91,7 +91,7 @@ class SheetsClient:
             .replace("&", "and")
             .replace(" ", "")
         )
-
+    
 
     # ---------------- DISPATCH ----------------
     def add_dispatch(self, company, product, quantity, order_number):
@@ -247,14 +247,19 @@ class SheetsClient:
             if not date.strip():
                 continue  # ignore empty rows
 
-            if product_filter and product_filter not in product.lower():
+            product_filters = [p for p in product_filter.split(",") if p]
+            party_filters = [p for p in party_filter.split(",") if p]
+
+            if product_filters and not any(p in product.lower() for p in product_filters):
                 continue
-            if party_filter and party_filter not in company.lower():
+
+            if party_filters and not any(p in company.lower() for p in party_filters):
                 continue
 
             try:
                 ordered = int(float(r[5]))
             except Exception:
+
                 ordered = 0
 
             dispatched = dispatch.get((serial, self._norm(product)), 0)

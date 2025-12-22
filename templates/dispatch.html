@@ -77,9 +77,17 @@ fetch('/api/parties_with_pending')
     });
   });
 
+
 /* ---------------- EVENT HANDLERS ---------------- */
-productSelect.onchange = loadOrders;
-companySelect.onchange = loadOrders;
+productSelect.onchange = () => {
+  companySelect.value = '';   // 🔥 clear other filter
+  loadOrders();
+};
+
+companySelect.onchange = () => {
+  productSelect.value = '';   // 🔥 clear other filter
+  loadOrders();
+};
 
 /* ---------------- LOAD ORDERS ---------------- */
 function loadOrders() {
@@ -88,6 +96,7 @@ function loadOrders() {
   body.innerHTML = '';
 
   if (productSelect.value) {
+    companySelect=
     fetch(`/api/orders_by_product?product=${encodeURIComponent(productSelect.value)}`)
       .then(r => r.json())
       .then(d => renderRows(d.orders));
@@ -177,7 +186,6 @@ function onQtyChange(input, max) {
 
   saveBtn.disabled = Object.keys(dispatches).length === 0;
 }
-
 /* ---------------- COMPLETE DISPATCH ---------------- */
 function completeDispatch(serial, company, product, remaining) {
   const key = `${serial}||${product}`;
