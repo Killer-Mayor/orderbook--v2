@@ -52,6 +52,25 @@
     </tbody>
   </table>
 </div>
+<h5 class="mt-4">Inventory Requirement</h5>
+
+<table class="table table-bordered table-sm">
+  <thead>
+    <tr>
+      <th>Width</th>
+      <th>Thickness</th>
+      <th>Total Weight</th>
+    </tr>
+  </thead>
+  <tbody id="inventoryBody">
+        <tr>
+        <td colspan="100%" class="text-muted text-center">
+          Loading pending orders…
+        </td>
+      </tr>
+    </tbody>
+</table>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -135,6 +154,22 @@ function initFilters() {
       ALL_PARTIES = d.parties;
       loadPivot();
     });
+  fetch('/api/inventory_requirements')
+  .then(r => r.json())
+  .then(d => {
+    const body = document.getElementById('inventoryBody');
+    body.innerHTML = '';
+
+    d.inventory.forEach(i => {
+      body.innerHTML += `
+        <tr>
+          <td>${i.width}</td>
+          <td>${i.thickness}</td>
+          <td>${i.total_weight}</td>
+        </tr>`;
+    });
+  });
+
 }
 
 /* ---------------- LOAD PIVOT ---------------- */

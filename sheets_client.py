@@ -43,6 +43,8 @@ class SheetsClient:
         )
         self.client = gspread.authorize(creds)
         self.sheet = self.client.open_by_key(SHEET_ID).worksheet("orders")
+        self.requirements_sheet = self.client.open_by_key(SHEET_ID).worksheet("requirement")
+        
         self._cache = {}
         self._cache_ttl = 15  # seconds (safe)
 
@@ -427,4 +429,11 @@ class SheetsClient:
             value_input_option="USER_ENTERED"
         )
         self._invalidate_cache()
-        
+    def get_inventory_requirements(self):
+        if "requirements_rows" in self._cache:
+            rows, ts = self._cache["requirements_rows"]
+            if time.time() - ts < self._cache_ttl:
+                return rows
+        rows = self.requirements_sheet.get_all_records()
+        # rows must include: product, width, thickness, weight
+        return rows

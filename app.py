@@ -311,7 +311,49 @@ def api_undo_delete_order():
         data=data["data"]
     )
     return jsonify({"ok": True})
+@app.route("/api/inventory_requirements")
+def inventory_requirements():
+    orders = sheets.get_recent_orders()
+    reqs = sheets.get_inventory_requirements()
 
+    product_map = {
+        r["product"]: (r["width"], r["thickness"], r["weight"])
+        for r in reqs
+    }
+
+    inventory = {}
+
+    for o in orders:
+        product = o.get("product")
+        if not product or product not in product_map:
+            continue
+
+        try:
+            qty = int(o.get("quantity", 0))
+        except (ValueError, TypeError):
+            continue
+
+        width, thickness, weight = product_map[product]
+
+        try:
+            weight = float(weight)
+        except (ValueError, TypeError):
+            continue
+
+        key = (width, thickness)
+        inventory[key] = inventory.get(key, 0) + (qty * weight)
+
+
+    result = [
+        {
+            "width": k[0],
+            "thickness": k[1],
+            "total_weight": round(v, 2)
+        }
+        for k, v in inventory.items()
+    ]
+
+    return jsonify({"inventory": result})
 
 if __name__ == "__main__":
     app.run(port=8000, debug=True)
