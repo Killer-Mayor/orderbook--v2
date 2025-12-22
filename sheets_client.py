@@ -437,3 +437,50 @@ class SheetsClient:
         rows = self.requirements_sheet.get_all_records()
         # rows must include: product, width, thickness, weight
         return rows
+    def get_pending_orders(self):
+        """
+        Returns row-level pending orders:
+        ordered - dispatched > 0
+        """
+        rows = self._cached("orders_rows", lambda: self.sheet.get_all_values())
+        dispatch = self._dispatch_map()
+
+        out = []
+
+        for r in rows[1:]:
+            if len(r) < 6:
+                continue
+
+            serial = (r[0] or "").strip()
+            date = (r[1] or "").strip()
+            company = (r[2] or "").strip()
+            product = (r[3] or "").strip()
+            brand = r[4] if len(r) > 4 else ""
+
+            if not date:
+                continue  # ignore empty rows
+
+            try:
+                ordered = int(float(r[5]))
+            except Exception:
+                continue
+
+            dispatched = dispatch.get((serial, self._norm(product)), 0)
+            pending = ordered - dispatched
+
+            if pending <= 0:
+                continue
+
+            out.append({
+                "serial": serial,
+                "date": date,
+                "company": company,
+                "product": product,
+                "brand": brand,
+                "quantity": pending,
+                "ordered": ordered,
+                "dispatched": dispatched,
+                "price": r[6] if len(r) > 6 else ""
+            })
+
+        return out

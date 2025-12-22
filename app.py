@@ -111,7 +111,7 @@ def submit():
                 continue
 
             if includes_gst:
-                price = round(price / 1.05, 2)
+                price = round(price / 1.05, 4)
 
             order_lines.append((product, brand, qty, price))
         except ValueError:
@@ -313,45 +313,98 @@ def api_undo_delete_order():
     return jsonify({"ok": True})
 @app.route("/api/inventory_requirements")
 def inventory_requirements():
-    orders = sheets.get_recent_orders()
+    print("\n========== INVENTORY REQUIREMENTS DEBUG ==========\n")
+
+    orders = sheets.get_pending_orders()
     reqs = sheets.get_inventory_requirements()
 
-    product_map = {
-        r["product"]: (r["width"], r["thickness"], r["weight"])
-        for r in reqs
-    }
+    print("---- RAW PENDING ORDERS ----")
+    for o in orders:
+        print(o)
+
+    print("\n---- RAW REQUIREMENTS ----")
+    for r in reqs:
+        print(r)
+
+    # Build product map
+    product_map = {}
+    print("\n---- BUILDING PRODUCT MAP ----")
+    for r in reqs:
+        product = r.get("product")
+        width = r.get("width")
+        thickness = r.get("thickness")
+        weight = r.get("weight")
+
+        print(f"REQ → product={product}, width={width}, thickness={thickness}, weight={weight}")
+
+        if not product:
+            print("  ❌ skipped: product missing")
+            continue
+
+        try:
+            weight_f = float(weight)
+        except (TypeError, ValueError):
+            print("  ❌ skipped: invalid weight")
+            continue
+
+        product_map[product] = (width, thickness, weight_f)
+        print("  ✅ added to product_map")
 
     inventory = {}
 
+    print("\n---- PROCESSING ORDERS ----")
     for o in orders:
         product = o.get("product")
-        if not product or product not in product_map:
+        qty_raw = o.get("quantity")
+
+        print(f"\nORDER → product={product}, quantity={qty_raw}")
+
+        if product not in product_map:
+            print("  ❌ skipped: product NOT FOUND in product_map")
             continue
 
         try:
-            qty = int(o.get("quantity", 0))
-        except (ValueError, TypeError):
+            qty = int(qty_raw)
+        except (TypeError, ValueError):
+            print("  ❌ skipped: invalid quantity")
             continue
 
-        width, thickness, weight = product_map[product]
+        width, thickness, unit_weight = product_map[product]
+        product_weight = qty * unit_weight
 
-        try:
-            weight = float(weight)
-        except (ValueError, TypeError):
-            continue
+        print(f"  ✔ width={width}, thickness={thickness}")
+        print(f"  ✔ unit_weight={unit_weight}")
+        print(f"  ✔ product_weight = {qty} × {unit_weight} = {product_weight}")
 
         key = (width, thickness)
-        inventory[key] = inventory.get(key, 0) + (qty * weight)
 
+        if key not in inventory:
+            inventory[key] = {
+                "total_qty": 0,
+                "total_weight": 0.0
+            }
+
+        inventory[key]["total_qty"] += qty
+        inventory[key]["total_weight"] += product_weight
+
+        print(f"  ➕ aggregated → total_qty={inventory[key]['total_qty']}, "
+              f"total_weight={inventory[key]['total_weight']}")
+
+    print("\n---- FINAL INVENTORY AGGREGATION ----")
+    for k, v in inventory.items():
+        print(f"{k} → qty={v['total_qty']}, weight={v['total_weight']}")
 
     result = [
         {
             "width": k[0],
             "thickness": k[1],
-            "total_weight": round(v, 2)
+            "qty": v["total_qty"],
+            "total_weight": round(v["total_weight"], 2)
         }
         for k, v in inventory.items()
     ]
+
+    print("\n========== END DEBUG ==========\n")
 
     return jsonify({"inventory": result})
 
